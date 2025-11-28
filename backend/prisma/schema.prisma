@@ -1,0 +1,152 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum RoleType {
+  regular
+  cashier
+  manager
+  superuser
+}
+
+enum TransactionType {
+  purchase
+  adjustment
+  redemption
+  event
+  transfer
+}
+
+enum PromotionType {
+  automatic
+  onetime
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  utorid       String    @unique
+  name         String
+  email        String    @unique
+  passwordHash String?
+  role         RoleType  @default(regular)
+  points       Int       @default(0)
+  verified     Boolean   @default(false)
+  suspicious   Boolean   @default(false)
+  birthday     String?
+  avatarUrl    String?
+  createdAt    DateTime  @default(now())
+  lastLogin    DateTime?
+
+  createdTransactions   Transaction[]       @relation("creator")
+  ownedTransactions     Transaction[]       @relation("owner")
+  processedRedemptions  Transaction[]       @relation("processedBy")
+  resetTokens           ResetToken[]
+
+  organizerOf           EventOrganizer[]
+  guestOf               EventGuest[]
+  usedPromotions        UserPromotionUsage[]
+}
+
+model ResetToken {
+  id         String   @id
+  user       User     @relation(fields: [userId], references: [id])
+  userId     Int
+  expiresAt  DateTime
+  consumed   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model Transaction {
+  id            Int             @id @default(autoincrement())
+  user          User            @relation("owner", fields: [userId], references: [id])
+  userId        Int
+  type          TransactionType
+  amount        Int             @default(0)
+  spent         Float?
+  remark        String?         @default("")
+  suspicious    Boolean?
+  relatedId     Int?
+  createdBy     User            @relation("creator", fields: [createdById], references: [id])
+  createdById   Int
+  processedBy   User?           @relation("processedBy", fields: [processedById], references: [id])
+  processedById Int?
+
+  createdAt     DateTime        @default(now())
+
+  promotions    TransactionPromotion[]
+}
+
+model Promotion {
+  id          Int           @id @default(autoincrement())
+  name        String
+  description String
+  type        PromotionType
+  startTime   DateTime
+  endTime     DateTime
+  minSpending Float?
+  rate        Float?
+  points      Int?
+
+  txs   TransactionPromotion[]
+  usage UserPromotionUsage[]
+}
+
+model TransactionPromotion {
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  transactionId Int
+  promotion     Promotion   @relation(fields: [promotionId], references: [id])
+  promotionId   Int
+
+  @@id([transactionId, promotionId])
+}
+
+model UserPromotionUsage {
+  user        User      @relation(fields: [userId], references: [id])
+  userId      Int
+  promotion   Promotion @relation(fields: [promotionId], references: [id])
+  promotionId Int
+  usedAt      DateTime?
+
+  @@id([userId, promotionId])
+}
+
+model Event {
+  id            Int      @id @default(autoincrement())
+  name          String
+  description   String
+  location      String
+  startTime     DateTime
+  endTime       DateTime
+  capacity      Int?
+  published     Boolean  @default(false)
+
+  pointsTotal   Int
+  pointsRemain  Int
+  pointsAwarded Int      @default(0)
+
+  organizers    EventOrganizer[]
+  guests        EventGuest[]
+}
+
+model EventOrganizer {
+  event   Event @relation(fields: [eventId], references: [id])
+  eventId Int
+  user    User  @relation(fields: [userId], references: [id])
+  userId  Int
+
+  @@id([eventId, userId])
+}
+
+model EventGuest {
+  event   Event @relation(fields: [eventId], references: [id])
+  eventId Int
+  user    User  @relation(fields: [userId], references: [id])
+  userId  Int
+
+  @@id([eventId, userId])
+}
